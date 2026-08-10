@@ -1,0 +1,83 @@
+#include "timer.h"
+
+Timer_0 Flag;
+
+void Fuse_result(void)
+{
+    // 2ms控制
+    if (Flag.T_2ms == 1)
+    {
+        Key_scan();
+        //姿态解算
+        getangle();
+        if(go_flag==1)
+        {
+            //左右平衡角速度环
+            pidout_3f = ROLL_ANGLESPEED_LOOP(pidout_2f);
+            pidout_3b = -pidout_3f;
+            //前后平衡角速度环
+            pidout_3 = PITCH_ANGLESPEED_LOOP(pidout_2);
+
+//            small_driver_set_duty(pidout_3f, pidout_3b);
+//            FBLM_set((int)(pidout_3f));
+//            BBLM_set((int)(pidout_3b));
+
+            BM_set((int)(pidout_2));
+        }
+
+        Flag.T_2ms = 0;
+    }
+    // 6ms控制
+    if (Flag.T_6ms == 1)
+    {
+        if(go_flag==1)
+        {
+            //左右平衡角度环
+            pidout_2f = ROLL_ANGLE_LOOP(0);
+            pidout_2b = -pidout_2f;
+            //前后平衡角度环
+            pidout_2 = PITCH_ANGLE_LOOP(0);
+        }
+        Flag.T_6ms = 0;
+    }
+    // 10ms控制
+    if (Flag.T_10ms == 1)
+    {
+        if(go_flag==1)
+        {
+
+
+        }
+        Flag.T_10ms = 0;
+    }
+    // 20ms控制
+    if (Flag.T_20ms == 1)
+    {
+        if(go_flag==1)
+        {
+            //编码器角度获取
+            ENCODER_get ();
+            //左右平衡速度环
+//            pidout_1f = ROLL_SPEED_LOOP(0);
+//            pidout_1b = -pidout_1f;
+            //前后平衡速度环
+//            pidout_1 = PITCH_SPEED_LOOP(600);
+        }
+        Flag.T_20ms = 0;
+    }
+    //100ms控制
+    if (Flag.T_100ms == 1)
+    {
+        Flag.T_100ms = 0;
+    }
+    // 1000ms控制
+    if (Flag.T_1s == 1)
+    {
+        Flag.T_1s = 0;
+
+    }
+}
+
+
+
+

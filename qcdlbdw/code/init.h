@@ -1,0 +1,29 @@
+#include "zf_common_headfile.h"
+#ifndef CODE_INIT_H_
+#define CODE_INIT_H_
+
+//蜂鸣器引脚定义
+#define BEED_PIN  P33_10
+//有刷电机引脚定义
+#define BM_PWM_PIN ATOM0_CH3_P21_5
+#define BM_DIR_PIN P21_4
+#define BM_1_PIN TIM5_ENCODER_CH1_P10_3
+#define BM_2_PIN TIM5_ENCODER_CH2_P10_1
+////前无刷电机引脚定义
+//#define FBLM_stop_PIN P11_2
+//#define FBLM_PWM_PIN ATOM0_CH5_P02_5
+//#define FBLM_DIR_PIN P02_4
+//#define FBLM_A_PIN TIM2_ENCODER_CH1_P33_7
+//#define FBLM_B_PIN TIM2_ENCODER_CH2_P33_6
+////后无刷电机引脚定义
+//#define BBLM_stop_PIN P11_3
+//#define BBLM_PWM_PIN ATOM0_CH7_P02_7
+//#define BBLM_DIR_PIN P02_6
+//#define BBLM_A_PIN TIM5_ENCODER_CH1_P10_3
+//#define BBLM_B_PIN TIM5_ENCODER_CH2_P10_1
+
+
+//程序声明
+void INIT(void);
+
+#endif

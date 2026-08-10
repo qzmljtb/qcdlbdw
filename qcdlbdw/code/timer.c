@@ -1,0 +1,112 @@
+#include "timer.h"
+
+Timer_0 Flag;
+
+void Fuse_result(void)
+{
+    // 2ms控制
+    if (Flag.T_2ms == 1)
+    {
+        Key_scan();
+        //姿态解算
+        getangle();
+        if(go_flag==1)
+        {
+            if(euler_angle.pitch >= -20 && euler_angle.pitch <= 20 && euler_angle.roll >= -18 && euler_angle.roll <= 16)
+            {
+                //左右平衡角速度环
+                pidout_3f = ROLL_ANGLESPEED_LOOP(pidout_2f);
+                pidout_3b = -pidout_3f;
+                //前后平衡角速度环
+                pidout_3 = PITCH_ANGLESPEED_LOOP(pidout_2);
+                //转向环角速度环
+                pidout_6f= YAW_ANGLESPEED_LOOP(pidout_5f);
+                pidout_6b=pidout_6f;
+                //--- 许  速度环
+                pidout_1 = PITCH_SPEED_LOOP(0);
+                pitch_zero = pitch_zero_set + pidout_1;
+
+                //------------
+
+                if(moto_mode == 0)
+                {
+                    small_driver_set_duty(-pidout_3f,-pidout_3b);
+                }
+
+                if(moto_mode == 1)
+                {
+                    small_driver_set_duty(-(pidout_3f+pidout_6f),-(pidout_3b+pidout_6b));
+                }
+                BM_set((int)(pidout_3));
+            }
+            else
+            {
+                small_driver_set_duty(0,0);
+                BM_set((int)(0));
+            }
+
+        }
+
+        Flag.T_2ms = 0;
+    }
+    // 6ms控制
+    if (Flag.T_8ms == 1)
+    {
+//        Angle_Z = error_beacon(beacon_X, centerX);
+        if(go_flag==1)
+        {
+            //左右平衡角度环
+            pidout_2f = ROLL_ANGLE_LOOP(pidout_1f);
+            pidout_2b = -pidout_2f;
+            //前后平衡角度环
+            pidout_2 = PITCH_ANGLE_LOOP(0);
+            //转向环角度环
+            pidout_5f= YAW_ANGLE_LOOP(0);
+        }
+        Flag.T_8ms = 0;
+    }
+    // 10ms控制
+    if (Flag.T_10ms == 1)
+    {
+        if(go_flag==1)
+        {
+
+
+        }
+        Flag.T_10ms = 0;
+    }
+    // 20ms控制
+    if (Flag.T_20ms == 1)
+    {
+        //编码器角度获取
+        ENCODER_get();
+        if(go_flag==1)
+        {
+
+            //左右平衡速度环
+            pidout_1f = ROLL_SPEED_LOOP(0);
+            pidout_1b = -pidout_1f;
+            //前后平衡速度环
+//            pidout_1 = PITCH_SPEED_LOOP(0);
+        }
+        Flag.T_20ms = 0;
+    }
+    //100ms控制
+    if (Flag.T_100ms == 1)
+    {
+        Flag.T_100ms = 0;
+    }
+    // 1000ms控制
+    if (Flag.T_1s == 1)
+    {
+        Flag.T_1s = 0;
+        static int speed = 0;
+        speed++;
+        if(speed == 3)
+            speed_flag = 1;
+    }
+}
+
+
+
+

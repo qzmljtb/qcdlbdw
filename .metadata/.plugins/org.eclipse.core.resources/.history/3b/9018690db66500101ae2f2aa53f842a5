@@ -1,0 +1,369 @@
+#include "camera.h"
+
+uint8 seek_flag;
+uint8 camera_threshold;//二值化阈值
+uint8 Beacon_x,Beacon_y;//信标灯x,y坐标
+int8 centerX = 54;
+float errorx;//转向误差
+uint8 bbb=0;
+uint16 aroundTime = 0;//未检测到信标的持续周期计数
+uint16 no_see_to_long_time = 0;//未检测到信标的持续周期计数
+uint16 spin_time = 0;
+uint8 turn_mode = 0;
+
+
+uint8 base_image[MT9V03X_H][MT9V03X_W];//原始图像
+uint8 use_image[80][108];//原始图像
+uint8 erzhi_image[80][108];//二维图像
+
+void Get_Use_Image(void)//压缩图像60*94
+{
+    uint8 mode = 0;
+    uint16 i = 0, j = 0, row = 0, line = 0;
+    if(mode == 0)
+    {
+        for (i = 40; i < 120; i ++)          //高 120 - 20 / 2  = 50，
+        {
+            for (j = 40; j <= 148 ; j ++)     //宽188 - 28 / 2  = 80，
+            {
+                use_image[row][line] = base_image[i][j]; //mt9v03x_image[i][j]
+                line++;
+            }
+             line = 0;
+             row++;
+        }
+    }
+}
+
+void er_zhi(void)
+{
+    //复制原始图像数组mt9v03x_image[0]给base_image[0]
+    memcpy(base_image[0],mt9v03x_image[0],MT9V03X_IMAGE_SIZE);
+    Get_Use_Image();
+    uint16 i = 0, j = 0;
+    camera_threshold=90;
+    for( i = 0; i < 80; i++)
+    {
+        for( j = 0; j < 108; j++)
+        {
+            if(use_image[i][j] > camera_threshold)
+            {
+                erzhi_image[i][j] = 255;
+            }
+            else
+            {
+                erzhi_image[i][j] = 0;
+            }
+        }
+    }
+}
+
+fy_d1 w[AREA_MAX];          // 连通域存储池
+AreaFeature area[AREA_MAX]; // 特征计算结果
+
+
+void seek_beacon(void)
+{
+    er_zhi();
+    int16 i, j, y, x;
+    int16 current_x1, current_x2;
+    // 步骤1：初始化连通域内存
+    for (i = 0; i < AREA_MAX; i++) {
+        w[i].y1 = w[i].y2 = -1;
+        w[i].work = w[i].end = w[i].type = 0;
+        for (j = 0; j < 80; j++)
+        {
+            w[i].x1[j] = w[i].x2[j] = -1;
+        }
+        area[i].narea=0;
+        area[i].alenght=0;
+    }
+    // 步骤2：逐行扫描连通域
+    for (y = 0; y < 80; y++)
+    {
+        x = 0;
+        while (x < 108)
+        {
+            if (erzhi_image[y][x] == 0)
+            {
+                x++;
+                continue;
+            }
+            current_x1 = x;
+            while (x < 108 && erzhi_image[y][x] != 0) x++;
+            current_x2 = x - 1;
+
+            // 步骤3：关联上下行连通域
+            uint8 merged = 0;
+            for (i = 0; i < AREA_MAX; i++)
+            {
+                if (w[i].work == 1 && w[i].end == 0)
+                {
+                    if (y > 0 && w[i].y2 == y - 1 &&
+                        !(current_x2 < w[i].x1[y-1] || current_x1 > w[i].x2[y-1]))
+                    {
+                        w[i].x1[y] = current_x1;
+                        w[i].x2[y] = current_x2;
+                        w[i].y2 = y; // 更新终止行
+                        merged = 1;
+                        break;
+                    }
+                }
+            }
+            if (!merged)
+            {
+                for (i = 0; i < AREA_MAX; ++i)
+                {
+                    if (w[i].work == 0)
+                    {
+                        w[i].work = 1;
+                        w[i].y1 = w[i].y2 = y;
+                        w[i].x1[y] = current_x1;
+                        w[i].x2[y] = current_x2;
+                        break;
+                    }
+                }
+            }
+        }
+        // 标记已完成采集的连通域（连续3行无数据）
+        for (i = 0; i < AREA_MAX; ++i)
+        {
+            if (w[i].work == 1 && w[i].end == 0 &&(y - w[i].y2) > 3)
+            {
+                w[i].end = 1; // 结束采集
+            }
+        }
+    }
+    // 步骤4：计算几何特征
+        for (i = 0; i < AREA_MAX; ++i)
+        {
+            if (w[i].work)
+            {
+                area[i].h = w[i].y2 - w[i].y1 + 1;
+                area[i].y = (w[i].y1 + w[i].y2) / 2;
+                int16 mid_row = area[i].y;
+                area[i].x = (w[i].x1[mid_row] + w[i].x2[mid_row]) / 2;
+                area[i].w = w[i].x2[mid_row] - w[i].x1[mid_row] + 1;
+
+                for(int16 k=w[i].y1;k<w[i].y2;k++)
+                {
+                    for(int16 m=w[i].x1[mid_row];m<w[i].x2[mid_row];m++)
+                    {
+                        if (erzhi_image[k][m] != 0)
+                        {
+                           area[i].narea++;//白点++
+                        }
+                        if(( erzhi_image[k-1][m] && erzhi_image[k][m-1] && erzhi_image[k+1][m] && erzhi_image[k][m+1])== 0)
+                        {
+                            area[i].alenght++;//周长计算
+                        }
+                    }
+
+                }
+            }
+        }
+
+        // 步骤5：信标灯筛选逻辑
+        for (i = 0; i < AREA_MAX; ++i)
+        {
+            if (w[i].work && !w[i].type)
+            {
+                if (w[i].y1 < 5) continue;
+
+                area[i].alw = (float)area[i].w * 10 / area[i].h;//长宽比
+                area[i].around = (4.0f * 3.1415927f * area[i].narea) / (area[i].alenght * area[i].alenght);//圆形度
+
+                if (    (area[i].alw >= 0) && (area[i].alw <= 41)
+//                        &&  0 < area[i].around && area[i].around <= 6                    //圆形度
+//                        &&  0 <= area[i].narea && area[i].narea <= 850              //白点面积
+//                        &&  0 < area[i].alenght && area[i].alenght <= 270
+                    )
+                {
+                    w[i].type = 1;
+                    break;
+                }
+            }
+        }
+
+
+        for (int i = 0; i <AREA_MAX; i++)
+        {
+            if (w[i].type == 1)
+            {
+                Beacon_x  =  area[i].x;
+                Beacon_y  =  area[i].y;
+                seek_flag = 1;
+                eye_show();
+                break;
+            }
+            else
+            {
+                Beacon_x = centerX;
+                Beacon_y = 0;
+                seek_flag = 0;
+            }
+        }
+}
+
+float error_beacon(void)
+{
+
+    static float error;
+    static float error1;
+    static float error2;
+    static uint8 change1 = 0;
+    static uint8 change2 = 0;
+    static uint8 flag_last = 0;//记录上次标志
+    uint8 X_distance = abs(Beacon_x - centerX);
+    uint8 Y_distance = abs(120-Beacon_y);
+    uint8 mode = 1;
+
+    if(mode == 1)
+    {
+        if(speed_flag == 1)run_speed=120;
+        if(seek_flag != flag_last)//标志改变
+        {
+            no_see_to_long_time = 0;
+            aroundTime = 0;//计时清零
+        }
+        if(seek_flag == 1)
+        {
+            aroundTime++;
+            change1=0;
+            change2=0;
+
+            if(bbb == 1)turn_mode = 1;
+            else turn_mode = 0;
+            moto_mode=1;
+            if(aroundTime >= 10)
+            {
+                if(Beacon_x - centerX >= 0)
+                {
+                    error1=error2+(atan2(Y_distance,X_distance)*28);
+                }
+                else
+                {
+                    error1=error2-(atan2(Y_distance,X_distance)*28);
+                }
+            }
+            error=error1;
+        }
+        else if(seek_flag == 0)
+        {
+            no_see_to_long_time ++;
+            aroundTime++;
+            moto_mode=1;
+            if(no_see_to_long_time ==260)
+            {
+                if(turn_mode == 0)turn_mode = 1;
+                if(turn_mode == 0)turn_mode = 1;
+                aroundTime = 0;
+            }
+            if(aroundTime >= 60)
+            {
+
+
+                if(turn_mode == 0)
+                {
+                    if(aroundTime >= 70)//每80ms加一次
+                    {
+                        aroundTime = 60; //350
+                        change1++;
+                        if(change1 <=38)error2 += 0.45*change1;//开始给一个大的误差，然后渐减来转圈找打
+                        bbb = 1;
+                        if(error2>=200)error2=200;//限制
+                    }
+
+                }
+                if(turn_mode == 1)
+               {
+                    if(aroundTime >= 70)//每80ms加一次
+                    {
+                        aroundTime = 60; //350
+                        change2++;
+                        if(change2 <=38)error2 -= 0.45*change2;//开始给一个大的误差，然后渐减来转圈找打
+                        bbb = 0;
+                        if(error2<=-180)error2=-180;//限制
+                    }
+
+               }
+
+            }
+        error=error2;
+        }
+    }
+
+//    if(mode == 2)
+//        {
+//            spin_time++;
+//            if(spin_time < 200)  seek_flag = 1;//1
+//            if(spin_time > 200)
+//            {
+//                 seek_flag = 0;
+//                 //if(spin_time > 4900) spin_time = 0;
+//                 if(spin_time > 200) spin_time = 200;
+//            }
+//            if(seek_flag != flag_last)//标志改变
+//            {
+//                aroundTime = 0;//计时清零
+//            }
+//            if(seek_flag == 1)
+//            {
+//                aroundTime++;
+//                moto_mode=0;
+//                if(aroundTime >= 44)
+//                {
+//                    if(aroundTime >= 52)//每60ms加一次
+//                    {
+//                        aroundTime = 44; //350
+//                        change++;
+//                    }
+////                    zero_k1=0.03f;
+////                    error = 25 - 0.45*change;
+////                    if(error < 15) error = 15; //限制
+//                }
+//            }
+//            else if(seek_flag == 0)
+//            {
+//                roll_anglespeed_wheel.Kp=2.0f;
+//                roll_anglespeed_wheel.Ki=0.01f;
+//                aroundTime++;
+//                moto_mode=0;
+//                if(aroundTime >= 44)
+//                {
+//                    if(aroundTime >= 52)//每60ms加一次
+//                    {
+//                        aroundTime = 44; //350
+//                        change++;
+//                    }
+//                    zero_k1=0.06f;
+//                    error = -25 + 0.45*change;
+//                    if(error > -15) error = -15; //限制
+//                }
+//            }
+//        }
+    flag_last = seek_flag;//记录上次标志
+
+    return error;
+}
+
+/*************************************************************************
+*  函数名称：void eye_show(void)
+*  功能说明：可视化识别出的信标灯的位置，并显示出十字准星
+*  参数说明：无
+*  函数返回：无
+*  修改时间：2022年3月31日
+*  备    注：  Bin_Image[LCDH][LCDW]; 二值化后图像数组
+*************************************************************************/
+void eye_show (void)//显示十字
+{
+  for(uint8 i = 1 ;i<(80) - 1;i++)
+  {
+      use_image[i][Beacon_x] = 255;
+
+  }
+  for(uint8 i = 1 ;i<(108) - 1;i++)
+  {
+      use_image[Beacon_y][i] = 255;
+  }
+}

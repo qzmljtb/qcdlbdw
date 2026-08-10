@@ -1,0 +1,49 @@
+#include "zf_common_headfile.h"
+
+#ifndef CODE_CAMERA_H_
+#define CODE_CAMERA_H_
+
+
+extern uint8 seek_flag;
+extern uint8 camera_threshold;//二值化阈值
+extern uint8 Beacon_x,Beacon_y;
+extern int8 centerX;
+extern float errorx;//转向误差
+
+extern uint16 spin_time;//用于无灯转态下转向调试
+extern uint8 turn_mode;
+extern uint8 bbb;
+extern uint8 base_image[MT9V03X_H][MT9V03X_W];//原始图像
+extern uint8 use_image[80][MT9V03X_W];//原始图像
+extern uint8 erzhi_image[80][MT9V03X_W];//二维图像
+
+typedef struct {            // 连通域轮廓信息结构体
+    uint8   type;           // 类型标记（0-未分类，1-候选目标）
+    uint8   work;           // 使用状态（0-空闲，1-占用）
+    uint8   end;            // 采集完成标记
+    int16   x1[80];       // 每行起始X坐标（-1表示无效）
+    int16   x2[80];       // 每行结束X坐标
+    int16   y1;             // 起始行号
+    int16   y2;             // 终止行号
+} fy_d1;
+
+typedef struct {            // 连通域几何特征
+    uint8   x, y;           // 中心坐标
+    uint16 narea;           //白点数
+    int16   w, h;           //宽度和高度
+    int16   alenght;        //周长
+    float   alw;            //长宽比
+    float   around;         //圆形度
+} AreaFeature;
+
+extern fy_d1 w[];          // 连通域存储池
+extern AreaFeature area[]; // 特征计算结果
+
+#define AREA_MAX    10     // 最大连通域存储数量
+
+void er_zhi(void);
+void seek_beacon(void);
+float error_beacon(void);
+
+void eye_show (void);
+#endif

@@ -1,0 +1,26 @@
+#include "motor.h"
+int32 dead_run = 280;
+float bdc_speed = 0;//给一个速度700
+
+//设置有刷电机
+void BM_set(int pwm)
+{
+    //pwm限幅
+    if(pwm>=8000)pwm=8000;
+    else if(pwm<=-8000)pwm=-8000;
+    //判断正反转
+    if(pwm>=0)
+    {
+        gpio_set_level(BM_DIR_PIN, 0);
+        pwm_set_duty(BM_PWM_PIN, pwm+dead_run);
+    }
+    else
+    {
+        gpio_set_level(BM_DIR_PIN, 1);
+        pwm_set_duty(BM_PWM_PIN, -(pwm+dead_run));
+    }
+}
+
+
+
+

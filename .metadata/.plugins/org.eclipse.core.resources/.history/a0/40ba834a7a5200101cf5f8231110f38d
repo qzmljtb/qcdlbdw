@@ -1,0 +1,144 @@
+#include "pid.h"
+
+//横滚
+PID_IncTypeDef roll_angle_wheel;        //角度环
+PID_IncTypeDef roll_anglespeed_wheel;   //角速度环
+PID_IncTypeDef roll_speed_wheel;        //速度环
+float   pidout_1b = 0, pidout_2b = 0, pidout_3b = 0, pidout_4b = 0, pidout_5b = 0, pidout_6b = 0,   //前轮数据传递
+        pidout_1f = 0, pidout_2f = 0, pidout_3f = 0, pidout_4f = 0, pidout_5f = 0, pidout_6f = 0;   //后轮数据传递
+//俯仰
+PID_IncTypeDef pitch_angle_wheel;       //角度环
+PID_IncTypeDef pitch_anglespeed_wheel;  //角速度环
+PID_IncTypeDef pitch_speed_wheel;       //速度环
+float   pidout_1 = 0, pidout_2 = 0, pidout_3 = 0;   //底轮数据传递
+
+float roll_zero = -0.5f;
+float pitch_zero = 1;
+
+void PID_Inc_Init(PID_IncTypeDef* sptr, float kp, float ki, float kd, float max_i, float max_out)
+{
+    sptr->Ek = 0;       //误差值
+    sptr->Ek1 = 0;      //上次误差值
+    sptr->Ek2 = 0;      //上上次误差值/误差累加
+    sptr->Kp = kp;      //比例常数
+    sptr->Ki = ki;      //积分常数
+    sptr->Kd = kd;      //微分常数
+    sptr->max_i = max_i;
+    sptr->max_out = max_out;
+}
+
+
+void PID_param_init(void)
+{
+//    PID_Inc_Init(&pitch_speed_wheel,        1.7f,0.00f,0,0,0);
+//    PID_Inc_Init(&pitch_angle_wheel,        52,0,33.5f,0,0);
+//    PID_Inc_Init(&pitch_anglespeed_wheel,   100,0.05f,1,0,0);
+//
+//    PID_Inc_Init(&roll_speed_wheel,         0.033f,0.000165f,0,0,0);
+//    PID_Inc_Init(&roll_angle_wheel,         120,0,150,0,0);
+//    PID_Inc_Init(&roll_anglespeed_wheel,    110,0.05f,5,0,0);
+
+    PID_Inc_Init(&pitch_speed_wheel,        1.7f,0.00f,0,0,0);
+    PID_Inc_Init(&pitch_angle_wheel,        52,0,33.5f,0,0);
+    PID_Inc_Init(&pitch_anglespeed_wheel,   100,0.05f,1,0,0);
+
+    PID_Inc_Init(&roll_speed_wheel,         0.033f,0.000165f,0,0,0);
+    PID_Inc_Init(&roll_angle_wheel,         60,0,0,0,900);
+    PID_Inc_Init(&roll_anglespeed_wheel,    80,0,0,0,9000);
+}
+
+
+float Positional_PID(PID_IncTypeDef* PID, float SetValue, float ActualValue)
+{
+    float PIDInc;
+    PID->Ek1 = PID->Ek;
+    PID->Ek = SetValue - ActualValue;
+    PID->Ek2 += PID->Ek;
+
+    if (PID->Ek2 > PID->max_i)  PID->Ek2 = PID->max_i;
+    if (PID->Ek2 < -PID->max_i) PID->Ek2 = -PID->max_i;
+
+    PIDInc =(PID->Kp * PID->Ek) +
+            (PID->Ki * PID->Ek2)+
+            (PID->Kd * (PID->Ek - PID->Ek1));
+    if(PIDInc>PID->max_out) PIDInc=PID->max_out;
+    if(PIDInc<-PID->max_out) PIDInc=-PID->max_out;
+
+    return PIDInc;
+}
+
+float Incremental_PID(PID_IncTypeDef* PID, float SetValue, float ActualValue)
+{
+    static float PIDInc=0;
+    PID->Ek2 = PID->Ek1;
+    PID->Ek1 = PID->Ek;
+    PID->Ek = SetValue - ActualValue;
+
+
+    if (PID->Ek2 > PID->max_i)  PID->Ek2 = PID->max_i;
+    if (PID->Ek2 < -PID->max_i) PID->Ek2 = -PID->max_i;
+
+    PIDInc +=(PID->Kp * (PID->Ek-PID->Ek1)) +
+             (PID->Ki * PID->Ek)+
+             (PID->Kd * (PID->Ek - 2*PID->Ek1+PID->Ek2));
+    if(PIDInc>PID->max_out) PIDInc=PID->max_out;
+    if(PIDInc<-PID->max_out) PIDInc=-PID->max_out;
+
+    return PIDInc;
+}
+
+
+
+//左右平衡
+//角速度环
+float ROLL_ANGLESPEED_LOOP(float value)
+{
+    float SetValue = value;
+    float ActualValue =imu963ra_gyro_y/40;
+    float out = Positional_PID(&roll_anglespeed_wheel, SetValue, ActualValue);
+    return out;
+}
+//角度环
+float ROLL_ANGLE_LOOP(float value)
+{
+    float SetValue = value;
+    float ActualValue = euler_angle.pitch-roll_zero;//
+    float out = Positional_PID(&roll_angle_wheel, SetValue, ActualValue);
+    return out;
+}
+//速度环
+float ROLL_SPEED_LOOP(float value)
+{
+    float SetValue = value;
+    float ActualValue = (BM_actual / 2);
+    float out = Positional_PID(&roll_speed_wheel, SetValue, ActualValue);
+    return out;
+}
+
+
+//前后平衡
+//角速度环
+float PITCH_ANGLESPEED_LOOP(float value)
+{
+    float SetValue = value;
+    float ActualValue = -imu963ra_gyro_z;
+    float out = Positional_PID(&pitch_anglespeed_wheel, SetValue, ActualValue);
+    return out;
+}
+//角度环
+float PITCH_ANGLE_LOOP(float value)
+{
+    float SetValue = value;
+    float ActualValue = euler_angle.roll - pitch_zero;
+    float out = Positional_PID(&pitch_angle_wheel, SetValue, ActualValue);
+    return out;
+}
+//速度环
+float PITCH_SPEED_LOOP(float value)
+{
+    float SetValue = value;
+    float ActualValue = BM_actual;
+    float out = Positional_PID(&pitch_speed_wheel, SetValue, ActualValue);
+    return out;
+}
+

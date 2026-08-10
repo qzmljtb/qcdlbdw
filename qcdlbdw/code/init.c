@@ -1,0 +1,40 @@
+#include "init.h"
+
+void INIT(void)
+{
+    //陀螺仪初始化
+        imu963ra_init();
+        EKF_Init();                            //零飘初始化
+    //pid初始化
+        PID_param_init();
+    //屏幕与按键初始化
+        ips200_set_dir(IPS200_CROSSWISE_180);
+        ips200_init(IPS200_TYPE_SPI);                       //屏幕
+        mt9v03x_init();                                     //摄像头
+        key_init(2);                                        //按键
+    //电机初始化
+        pwm_init(BM_PWM_PIN, 30000, 0);                        //有刷pwm
+        gpio_init(BM_DIR_PIN, GPO, 0, GPO_PUSH_PULL);       //有刷方向
+
+        small_driver_uart_init();                           //无刷驱动
+
+//        gpio_init(FBLM_stop_PIN, GPO, 1, GPO_PUSH_PULL);    //前无刷刹车
+//        pwm_init(FBLM_PWM_PIN, 50, 10000);                  //前无刷pwm
+//        gpio_init(FBLM_DIR_PIN, GPO, 0, GPO_PUSH_PULL);     //前无刷方向
+//
+//        gpio_init(BBLM_stop_PIN, GPO, 1, GPO_PUSH_PULL);    //后无刷刹车
+//        pwm_init(BBLM_PWM_PIN, 50, 10000);                  //后无刷pwm
+//        gpio_init(BBLM_DIR_PIN, GPO, 0, GPO_PUSH_PULL);     //后无刷方向
+    //编码器初始化
+        encoder_quad_init(TIM5_ENCODER, BM_1_PIN, BM_2_PIN);         //有刷电机编码器
+//        encoder_quad_init(TIM4_ENCODER, TIM4_ENCODER_CH1_P02_8, TIM4_ENCODER_CH2_P00_9);
+//        encoder_quad_init(TIM2_ENCODER, FBLM_A_PIN, FBLM_B_PIN);    //前无刷电机编码器
+//        encoder_quad_init(TIM5_ENCODER, BBLM_A_PIN, BBLM_B_PIN);    //后无刷电机编码器
+    //定时器初始化
+        pit_init(CCU60_CH0, 1000);
+    //串口初始化
+        uart_init(UART_2,115200,UART2_TX_P10_5,UART2_RX_P10_6);
+        wireless_uart_init();
+}
+
+
